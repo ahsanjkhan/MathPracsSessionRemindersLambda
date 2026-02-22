@@ -36,25 +36,22 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
         
         results = []
         for session in sessions:
-            # Convert start and end to UTC
-            start_str = session.get('start')
-            end_str = session.get('end')
+            # Use UTC fields directly
+            start_utc_str = session.get('utcStart')
+            end_utc_str = session.get('utcEnd')
+            iana_time_zone = session.get('timezone')
             
-            if not start_str or not end_str:
+            if not start_utc_str or not end_utc_str or not iana_time_zone:
                 continue
             
-            start_dt = datetime.fromisoformat(start_str)
-            end_dt = datetime.fromisoformat(end_str)
+            start_utc = datetime.fromisoformat(start_utc_str)
+            end_utc = datetime.fromisoformat(end_utc_str)
             
-            # Ensure timezone-aware
-            if start_dt.tzinfo is None:
-                start_dt = start_dt.replace(tzinfo=timezone.utc)
-            if end_dt.tzinfo is None:
-                end_dt = end_dt.replace(tzinfo=timezone.utc)
-            
-            # Convert to UTC
-            start_utc = start_dt.astimezone(timezone.utc)
-            end_utc = end_dt.astimezone(timezone.utc)
+            # Convert UTC to local timezone
+            from zoneinfo import ZoneInfo
+            local_tz = ZoneInfo(iana_time_zone)
+            start_dt = start_utc.astimezone(local_tz)
+            end_dt = end_utc.astimezone(local_tz)
             
             # Filter: start time between now and 4 hours from now
             if not (now_utc <= start_utc <= four_hours_later):
@@ -141,8 +138,8 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
             reminder_item = {
                 'uid': uid,
                 'summary': summary,
-                'start': start_str,
-                'end': end_str,
+                'start': start_dt.isoformat(),
+                'end': end_dt.isoformat(),
                 'start_utc': start_utc.isoformat(),
                 'end_utc': end_utc.isoformat(),
                 'tutorId': session.get('tutorId'),
