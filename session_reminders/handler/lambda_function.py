@@ -60,6 +60,10 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
             summary = session.get('summary', '')
             session_id = session.get('sessionId', '')
             
+            # Skip proposed sessions
+            if 'proposed' in summary.lower():
+                continue
+            
             # Extract student name: everything before " Tutoring" (case-insensitive)
             import re
             match = re.search(r'^(.+?)\s+tutoring', summary, re.IGNORECASE)
