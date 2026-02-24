@@ -58,12 +58,15 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
                 continue
             
             summary = session.get('summary', '')
+            session_id = session.get('sessionId', '')
             
-            # Extract student name by removing " Tutoring"
-            student_name = summary.replace(' Tutoring', '').replace(' tutoring', '')
-            
-            if not student_name:
+            # Extract student name: everything before " Tutoring" (case-insensitive)
+            import re
+            match = re.search(r'^(.+?)\s+tutoring', summary, re.IGNORECASE)
+            if not match:
                 continue
+            
+            student_name = match.group(1).strip()
             
             # Get student from Students table
             try:
@@ -92,8 +95,8 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
             
             doc_url = student.get('docUrl', 'N/A')
             
-            # Create UID
-            uid = f"{summary}#{start_utc.isoformat()}#{end_utc.isoformat()}"
+            # Create UID using sessionId instead of summary to prevent duplicates on rename
+            uid = f"{session_id}#{start_utc.isoformat()}#{end_utc.isoformat()}"
             
             # Check if reminder already exists
             try:
@@ -143,7 +146,7 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
                 'start_utc': start_utc.isoformat(),
                 'end_utc': end_utc.isoformat(),
                 'tutorId': session.get('tutorId'),
-                'sessionId': session.get('sessionId'),
+                'sessionId': session_id,
                 'status': session.get('status'),
                 'sms_sent': sms_sent
             }
