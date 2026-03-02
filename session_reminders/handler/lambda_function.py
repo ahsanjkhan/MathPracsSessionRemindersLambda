@@ -15,6 +15,7 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
         session_reminders_table_name = os.environ.get('SESSION_REMINDERS_TABLE_NAME')
         sessions_table_name = os.environ.get('SESSIONS_TABLE_NAME')
         students_table_name = os.environ.get('STUDENTS_TABLE_NAME')
+        students_metadata_table_name = os.environ.get('STUDENTS_METADATA_TABLE_NAME')
         secrets_arn = os.environ.get('SECRETS_ARN')
         
         secrets = get_secrets(secrets_arn)
@@ -23,6 +24,7 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
         session_reminders_table = dynamodb.Table(session_reminders_table_name)
         sessions_table = dynamodb.Table(sessions_table_name)
         students_table = dynamodb.Table(students_table_name)
+        students_metadata_table = dynamodb.Table(students_metadata_table_name)
         
         twilio_client = Client(secrets['twilioAccountSid'], secrets['twilioAuthToken'])
         
@@ -75,28 +77,33 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
             # Get student from Students table
             try:
                 student_response = students_table.get_item(Key={'studentName': student_name})
+                student_metadata_response = students_metadata_table.get_item(Key={'studentName': student_name})
                 if 'Item' not in student_response:
                     print(f"Student not found: {student_name}")
                     continue
-                
+
+                if 'Item' not in student_metadata_response:
+                    print(f"Student metadata not found: {student_name}")
+                    continue
+
                 student = student_response['Item']
+                student_metadata = student_metadata_response['Item']
             except Exception as e:
                 print(f"Error fetching student {student_name}: {e}")
                 continue
             
-            # Get phone numbers with smsEnabled = true
+            # Get phone numbers with sessionReminders = true
             phone_numbers = []
-            for i in range(1, 6):
-                number_key = f'number{i}'
-                if number_key in student:
-                    number_obj = student[number_key]
-                    if number_obj.get('smsEnabled') is True:
-                        phone_numbers.append(number_obj.get('phoneNumber'))
-            
+            phone_numbers_map = student_metadata.get('phoneNumbers', {})
+
+            for phone_number, settings in phone_numbers_map.items():
+                if settings.get('sessionReminders') is True:
+                    phone_numbers.append(phone_number)
+
             if not phone_numbers:
-                print(f"No SMS-enabled phone numbers for {student_name}")
+                print(f"No session reminder-enabled phone numbers for {student_name}")
                 continue
-            
+
             doc_url = student.get('docUrl', 'N/A')
             
             # Create UID using sessionId instead of summary to prevent duplicates on rename
