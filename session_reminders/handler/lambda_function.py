@@ -41,19 +41,12 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
             # Use UTC fields directly
             start_utc_str = session.get('utcStart')
             end_utc_str = session.get('utcEnd')
-            iana_time_zone = session.get('timezone')
             
-            if not start_utc_str or not end_utc_str or not iana_time_zone:
+            if not start_utc_str or not end_utc_str:
                 continue
             
             start_utc = datetime.fromisoformat(start_utc_str)
             end_utc = datetime.fromisoformat(end_utc_str)
-            
-            # Convert UTC to local timezone
-            from zoneinfo import ZoneInfo
-            local_tz = ZoneInfo(iana_time_zone)
-            start_dt = start_utc.astimezone(local_tz)
-            end_dt = end_utc.astimezone(local_tz)
             
             # Filter: start time between now and 4 hours from now
             if not (now_utc <= start_utc <= four_hours_later):
@@ -91,6 +84,18 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
             except Exception as e:
                 print(f"Error fetching student {student_name}: {e}")
                 continue
+
+            iana_time_zone = student_metadata.get('studentTimezone', "unknown")
+
+            if iana_time_zone == "unknown":
+                print(f"Unknown timezone for student {student_name}")
+                continue
+
+            # Convert UTC to local timezone
+            from zoneinfo import ZoneInfo
+            local_tz = ZoneInfo(iana_time_zone)
+            start_dt = start_utc.astimezone(local_tz)
+            end_dt = end_utc.astimezone(local_tz)
             
             # Get phone numbers with sessionReminders = true
             phone_numbers = []
@@ -131,7 +136,7 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
             # Format message
             start_pretty = start_dt.strftime('%I:%M %p').lstrip('0')
             end_pretty = end_dt.strftime('%I:%M %p').lstrip('0')
-            message_body = f"(AWS) Hello, this is a reminder for {summary} with MathPracs today from {start_pretty} to {end_pretty}.\n\nMeeting info: {doc_url}."
+            message_body = f"Hello, this is a reminder for {summary} with MathPracs today from {start_pretty} to {end_pretty}.\n\nMeeting info: {doc_url}."
             
             # Send SMS to each phone number
             for phone in phones_to_send:
