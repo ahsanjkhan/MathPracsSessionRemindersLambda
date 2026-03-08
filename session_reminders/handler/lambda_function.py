@@ -28,9 +28,9 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
         
         twilio_client = Client(secrets['twilioAccountSid'], secrets['twilioAuthToken'])
         
-        # Get current time and 4-hour window
+        # Get current time and 5-hour window
         now_utc = datetime.now(timezone.utc)
-        four_hours_later = now_utc + timedelta(hours=4)
+        five_hours_later = now_utc + timedelta(hours=5)
         
         # Scan all sessions
         sessions = scan_all_sessions(sessions_table)
@@ -48,8 +48,8 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
             start_utc = datetime.fromisoformat(start_utc_str)
             end_utc = datetime.fromisoformat(end_utc_str)
             
-            # Filter: start time between now and 4 hours from now
-            if not (now_utc <= start_utc <= four_hours_later):
+            # Filter: start time between now and 5 hours from now
+            if not (now_utc <= start_utc <= five_hours_later):
                 continue
             
             summary = session.get('summary', '')

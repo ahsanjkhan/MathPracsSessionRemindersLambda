@@ -10,7 +10,7 @@ You can learn more about MathPracs at https://mathpracs.com
 
 The Lambda is invoked by an AWS EventBridge Scheduler Rule every 3 minutes.
 
-It scans the Sessions DynamoDB table for sessions starting within the next 4 hours.
+It scans the Sessions DynamoDB table for sessions starting within the next 5 hours.
 
 For each upcoming session, it queries the Students DynamoDB table to get phone numbers with SMS enabled.
 
