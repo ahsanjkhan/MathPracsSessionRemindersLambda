@@ -241,7 +241,7 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
             tutor_message_body = f"Hello, this is a reminder for {summary} from {tutor_start_pretty} to {tutor_end_pretty}.\n"
 
             # Get discord channel ID for the tutor
-            discord_channel_id = tutor_metadata.get('sessionRemindersDiscordChannelId')
+            discord_channel_id = tutor.get('sessionRemindersDiscordChannelId')
 
             if not discord_channel_id:
                 print(f"No session reminder discord channel ID for tutor {tutor_name}")
