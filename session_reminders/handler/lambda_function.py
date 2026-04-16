@@ -148,7 +148,7 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
             # Format message
             start_pretty = start_dt.strftime('%I:%M %p').lstrip('0')
             end_pretty = end_dt.strftime('%I:%M %p').lstrip('0')
-            message_body = f"Hello, this is a reminder for {summary} with MathPracs today from {start_pretty} to {end_pretty}.\n\nMeeting info: {doc_url}."
+            message_body = f"Hello, this is a reminder for {summary} with MathPracs today from {start_pretty} to {end_pretty} {start_dt.strftime('%Z')}.\n\nMeeting info: {doc_url}."
             
             # Send SMS to each phone number
             for phone in phones_to_send:
@@ -238,7 +238,7 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
             # Format message
             tutor_start_pretty = tutor_start_dt.strftime('%B %d %Y @ ') + tutor_start_dt.strftime('%I:%M %p').lstrip('0')
             tutor_end_pretty = tutor_end_dt.strftime('%B %d %Y @ ') + tutor_end_dt.strftime('%I:%M %p').lstrip('0')
-            tutor_message_body = f"Hello, this is a reminder for {summary} from {tutor_start_pretty} to {tutor_end_pretty}.\n"
+            tutor_message_body = f"Hello, this is a reminder for {summary} from {tutor_start_pretty} to {tutor_end_pretty} {tutor_start_dt.strftime('%Z')}.\n"
 
             # Get discord channel ID for the tutor
             discord_channel_id = tutor.get('sessionRemindersDiscordChannelId')
