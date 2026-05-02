@@ -10,6 +10,7 @@ import boto3
 import httpx
 from aws_lambda_typing import context as lambda_context
 from twilio.rest import Client
+from twilio.base.exceptions import TwilioRestException
 
 
 def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context: lambda_context.Context) -> Dict[str, Union[str, int]]:
@@ -161,6 +162,13 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
                     )
                     sms_sent[phone] = message.sid
                     print(f"Sent SMS to {phone}: {message.sid}")
+                except TwilioRestException as e:
+                    if e.status in {400, 404}:
+                        sms_sent[phone] = f"PERMANENT_{e.status}_{e.code}"
+                        print(f"Permanent SMS failure for {phone}: {e}")
+                    else:
+                        sms_sent[phone] = 'N/A'
+                        print(f"Transient SMS failure for {phone}: {e}")
                 except Exception as e:
                     sms_sent[phone] = 'N/A'
                     print(f"Failed to send SMS to {phone}: {e}")
