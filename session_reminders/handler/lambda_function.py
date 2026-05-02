@@ -176,7 +176,8 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
                 'tutorId': session.get('tutorId'),
                 'sessionId': session_id,
                 'status': session.get('status'),
-                'sms_sent': sms_sent
+                'sms_sent': sms_sent,
+                'discord_sent': existing_reminder.get('discord_sent', False) if existing_reminder else False
             }
             
             if session.get('studentInfo'):
