@@ -24,17 +24,16 @@ def lambda_handler(event, context):
     for record in event.get('Records', []):
         message = json.loads(record['Sns']['Message'])
 
-        metric_name = message.get('Trigger', {}).get('MetricName', 'Unknown')
-        dimensions = message.get('Trigger', {}).get('Dimensions', [])
-        reason = next((d['value'] for d in dimensions if d['name'] == 'Reason'), 'N/A')
+        alarm_name = message.get('AlarmName', 'Unknown')
         timestamp = message.get('StateChangeTime', '')
 
         logs_url = build_logs_url(timestamp)
+        alarm_url = build_alarm_url(alarm_name)
 
         notification = (
-            f"🚨 **SessionReminders Alarm: {metric_name}**\n"
-            f"Reason: {reason}\n"
+            f"🚨 **SessionReminders Alarm: {alarm_name}**\n"
             f"Time: {timestamp}\n\n"
+            f"🔍 Alarm: {alarm_url}\n"
             f"📋 Logs: {logs_url}"
         )
 
@@ -53,6 +52,14 @@ def send_discord_message(bot_token: str, channel_id: str, message_body: str):
     )
     response.raise_for_status()
     return response
+
+
+def build_alarm_url(alarm_name: str) -> str:
+    encoded_alarm_name = quote(alarm_name, safe='')
+    return (
+        f"https://console.aws.amazon.com/cloudwatch/home?region={REGION}"
+        f"#alarmsV2:alarm/{encoded_alarm_name}"
+    )
 
 
 def build_logs_url(timestamp_str: str) -> str:
