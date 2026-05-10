@@ -12,6 +12,24 @@ from aws_lambda_typing import context as lambda_context
 from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
 
+METRICS_NAMESPACE = "MathPracs/SessionReminders"
+cloudwatch_client = boto3.client('cloudwatch')
+
+
+def emit_metric(metric_name: str, reason: str) -> None:
+    try:
+        cloudwatch_client.put_metric_data(
+            Namespace=METRICS_NAMESPACE,
+            MetricData=[{
+                'MetricName': metric_name,
+                'Dimensions': [{'Name': 'Reason', 'Value': reason}],
+                'Value': 1,
+                'Unit': 'Count'
+            }]
+        )
+    except Exception as e:
+        print(f"Failed to emit metric {metric_name}/{reason}: {e}")
+
 
 def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context: lambda_context.Context) -> Dict[str, Union[str, int]]:
     try:
@@ -87,22 +105,26 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
                 student_metadata_response = students_metadata_table.get_item(Key={'studentName': student_name})
                 if 'Item' not in student_response:
                     print(f"Student not found: {student_name}")
+                    emit_metric("StudentInfoDDB", "StudentNotFound")
                     continue
 
                 if 'Item' not in student_metadata_response:
                     print(f"Student metadata not found: {student_name}")
+                    emit_metric("StudentInfoDDB", "MetadataNotFound")
                     continue
 
                 student = student_response['Item']
                 student_metadata = student_metadata_response['Item']
             except Exception as e:
                 print(f"Error fetching student {student_name}: {e}")
+                emit_metric("StudentInfoDDB", "FetchException")
                 continue
 
             iana_time_zone = student_metadata.get('studentTimezone', "unknown")
 
             if iana_time_zone == "unknown":
                 print(f"Unknown timezone for student {student_name}")
+                emit_metric("StudentInfoDDB", "UnknownTimezone")
                 continue
 
             # Convert UTC to local timezone
@@ -112,14 +134,20 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
             
             # Get phone numbers with sessionReminders = true
             phone_numbers = []
+            external_phone_numbers = []
             phone_numbers_map = student_metadata.get('phoneNumbers', {})
 
             for phone_number, settings in phone_numbers_map.items():
                 if settings.get('sessionReminders') is True:
                     phone_numbers.append(phone_number)
+                    if phone_number != "18325745458" and phone_number != "18324174712": # Exclude default added numbers for metric purposes
+                        external_phone_numbers.append(phone_number)
+
+            if not external_phone_numbers:
+                print(f"No session reminder-enabled phone numbers for {student_name}")
+                emit_metric("StudentInfoDDB", "NoPhoneNumbers")
 
             if not phone_numbers:
-                print(f"No session reminder-enabled phone numbers for {student_name}")
                 continue
 
             doc_url = student.get('docUrl', 'N/A')
@@ -166,12 +194,15 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
                     if e.status in {400, 404}:
                         sms_sent[phone] = f"PERMANENT_{e.status}_{e.code}"
                         print(f"Permanent SMS failure for {phone}: {e}")
+                        emit_metric("APIFailure", "TwilioPermanent")
                     else:
                         sms_sent[phone] = 'N/A'
                         print(f"Transient SMS failure for {phone}: {e}")
+                        emit_metric("APIFailure", "TwilioTransient")
                 except Exception as e:
                     sms_sent[phone] = 'N/A'
                     print(f"Failed to send SMS to {phone}: {e}")
+                    emit_metric("APIFailure", "TwilioGeneric")
             
             # Save/update reminder in DynamoDB
             reminder_item = {
@@ -208,26 +239,31 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
                 tutor_metadata_response = tutors_metadata_table.get_item(Key={'tutorId': tutor_id})
                 if 'Item' not in tutor_response:
                     print(f"Tutor with tutorId not found: {tutor_id}")
+                    emit_metric("TutorInfoDDB", "TutorNotFound")
                     continue
 
                 if 'Item' not in tutor_metadata_response:
                     print(f"Tutor metadata with tutorId not found: {tutor_id}")
+                    emit_metric("TutorInfoDDB", "MetadataNotFound")
                     continue
 
                 tutor = tutor_response['Item']
                 tutor_metadata = tutor_metadata_response['Item']
             except Exception as e:
                 print(f"Error fetching tutor with tutorId {session.get('tutorId')}: {e}")
+                emit_metric("TutorInfoDDB", "FetchException")
                 continue
 
             tutor_name = tutor_metadata.get('tutorName', 'unknown')
             if tutor_name == "unknown":
                 print(f"Warning: unknown tutorName for tutor with tutorId {tutor_id}")
+                emit_metric("TutorInfoDDB", "UnknownTutorName")
 
             tutor_iana_time_zone = tutor_metadata.get('tutorTimezone', 'unknown')
 
             if tutor_iana_time_zone == "unknown":
                 print(f"Unknown timezone for tutor {tutor_name}")
+                emit_metric("TutorInfoDDB", "UnknownTimezone")
                 continue
 
             # Convert UTC to local timezone for the tutor
@@ -254,6 +290,7 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
 
             if not discord_channel_id:
                 print(f"No session reminder discord channel ID for tutor {tutor_name}")
+                emit_metric("TutorInfoDDB", "NoDiscordChannel")
                 continue
 
             print(f"Sending Discord message: {tutor_message_body}")
@@ -269,6 +306,7 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
 
             except Exception as e:
                 print(f"Failed to send Discord message: {e}")
+                emit_metric("APIFailure", "DiscordSendFailed")
 
             result['discord_sent_count'] = discord_sent_count
         
@@ -282,6 +320,7 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
         
     except Exception as e:
         print(f"Error: {str(e)}")
+        emit_metric("UnknownFailures", "UnhandledException")
         return {
             'statusCode': 500,
             'body': json.dumps({'error': str(e)})
