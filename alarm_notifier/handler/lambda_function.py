@@ -5,6 +5,7 @@ from urllib.parse import quote
 
 import boto3
 import httpx
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
 
 
 DISCORD_API_BASE = "https://discord.com/api/v10"
@@ -37,14 +38,21 @@ def lambda_handler(event, context):
             f"📋 Logs: {logs_url}"
         )
 
-        httpx.post(
-            f"{DISCORD_API_BASE}/channels/{channel_id}/messages",
-            headers={"Authorization": f"Bot {bot_token}", "Content-Type": "application/json"},
-            json={"content": notification},
-            timeout=10.0
-        )
+        send_discord_message(bot_token, channel_id, notification)
 
     return {"statusCode": 200}
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=10), retry=retry_if_exception(lambda e: isinstance(e, httpx.HTTPError)))
+def send_discord_message(bot_token: str, channel_id: str, message_body: str):
+    response = httpx.post(
+        f"{DISCORD_API_BASE}/channels/{channel_id}/messages",
+        headers={"Authorization": f"Bot {bot_token}", "Content-Type": "application/json"},
+        json={"content": message_body},
+        timeout=10.0
+    )
+    response.raise_for_status()
+    return response
 
 
 def build_logs_url(timestamp_str: str) -> str:

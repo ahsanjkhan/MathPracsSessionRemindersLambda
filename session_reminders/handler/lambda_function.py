@@ -17,15 +17,18 @@ cloudwatch_client = boto3.client('cloudwatch')
 
 
 def emit_metric(metric_name: str, reason: str) -> None:
-    cloudwatch_client.put_metric_data(
-        Namespace=METRICS_NAMESPACE,
-        MetricData=[{
-            'MetricName': metric_name,
-            'Dimensions': [{'Name': 'Reason', 'Value': reason}],
-            'Value': 1,
-            'Unit': 'Count'
-        }]
-    )
+    try:
+        cloudwatch_client.put_metric_data(
+            Namespace=METRICS_NAMESPACE,
+            MetricData=[{
+                'MetricName': metric_name,
+                'Dimensions': [{'Name': 'Reason', 'Value': reason}],
+                'Value': 1,
+                'Unit': 'Count'
+            }]
+        )
+    except Exception as e:
+        print(f"Failed to emit metric {metric_name}/{reason}: {e}")
 
 
 def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context: lambda_context.Context) -> Dict[str, Union[str, int]]:
@@ -143,6 +146,8 @@ def lambda_handler(event: Dict[str, Union[str, int, float, bool, None]], context
             if not external_phone_numbers:
                 print(f"No session reminder-enabled phone numbers for {student_name}")
                 emit_metric("StudentInfoDDB", "NoPhoneNumbers")
+
+            if not phone_numbers:
                 continue
 
             doc_url = student.get('docUrl', 'N/A')
